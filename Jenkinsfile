@@ -83,37 +83,30 @@ pipeline {
                         stash includes: "${TOOL_NAME}-${TARGET}.zip", name: "${TARGET}"
                     }
                 }
-                // stage ('Windows x86_64') {
-                //    agent {
-                //        label "${WINDOWS_AMD64_TARGET}"
-                //    }
-                //
-                //    environment {
-                //        TARGET = "${WINDOWS_AMD64_TARGET}"
-                //        LLVM_HOME = 'C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\BuildTools\\VC\\Tools\\Llvm\\x64'
-                //        LIBCLANG_PATH = "${LLVM_HOME}\\bin"
-                //        CMAKE_PATH = 'C:\\Program Files\\CMake\\bin'
-                //        MSBUILD_PATH = 'C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\BuildTools\\MSBuild\\Current\\Bin'
-                //        CARGO_PATH = "${homedrive}${homepath}\\.cargo\\bin"
-                //        PATH = "${CARGO_PATH};${LIBCLANG_PATH};${MSBUILD_PATH};${CMAKE_PATH};$PATH"
-                //    }
-                //
-                //    steps {
-                //        powershell 'git clean -fdx'
-                //        powershell 'git submodule update --init --recursive'
-                //
-                //        powershell """
-                //           cargo run --package vm-builder --target ${TARGET} -- `
-                //                --app-name ${APP_NAME} `
-                //                --identifier ${APP_IDENTIFIER} `
-                //                --author ${APP_AUTHOR} `
-                //                --libraries ${APP_LIBRARIES} `
-                //                --release """
-                //
-                //        powershell "Compress-Archive -Path target/${TARGET}/release/bundle/${APP_NAME} -DestinationPath ${APP_NAME}-${TARGET}.zip"
-                //        stash includes: "${APP_NAME}-${TARGET}.zip", name: "${TARGET}"
-                //    }
-                // }
+                stage ('Windows x86_64') {
+                    agent {
+                        label "${WINDOWS_AMD64_TARGET}"
+                    }
+
+                    environment {
+                        TARGET = "${WINDOWS_AMD64_TARGET}"
+                        LLVM_HOME = 'C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\BuildTools\\VC\\Tools\\Llvm\\x64'
+                        LIBCLANG_PATH = "${LLVM_HOME}\\bin"
+                        CMAKE_PATH = 'C:\\Program Files\\CMake\\bin'
+                        MSBUILD_PATH = 'C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\BuildTools\\MSBuild\\Current\\Bin'
+                        CARGO_PATH = "${homedrive}${homepath}\\.cargo\\bin"
+                        PATH = "${CARGO_PATH};${LIBCLANG_PATH};${MSBUILD_PATH};${CMAKE_PATH};$PATH"
+                    }
+
+                    steps {
+                        powershell 'git clean -fdx'
+
+                        powershell "cargo build --bin ${TOOL_NAME} --release"
+
+                        powershell "Compress-Archive -Path target/release/${TOOL_NAME}.exe -DestinationPath ${TOOL_NAME}-${TARGET}.zip"
+                        stash includes: "${TOOL_NAME}-${TARGET}.zip", name: "${TARGET}"
+                    }
+                }
             }
         }
 
@@ -133,7 +126,7 @@ pipeline {
                 unstash "${LINUX_AMD64_TARGET}"
                 unstash "${MACOS_INTEL_TARGET}"
                 unstash "${MACOS_M1_TARGET}"
-                //unstash "${WINDOWS_AMD64_TARGET}"
+                unstash "${WINDOWS_AMD64_TARGET}"
 
                 sh """
                 cargo run --bin feenk-releaser --release -- \
@@ -143,9 +136,10 @@ pipeline {
                     --bump-minor \
                     --auto-accept \
                     --assets \
-                        ${APP_NAME}-${LINUX_AMD64_TARGET}.zip \
-                        ${APP_NAME}-${MACOS_INTEL_TARGET}.app.zip \
-                        ${APP_NAME}-${MACOS_M1_TARGET}.app.zip """
+                        ${TOOL_NAME}-${LINUX_AMD64_TARGET}.zip \
+                        ${TOOL_NAME}-${MACOS_INTEL_TARGET}.app.zip \
+                        ${TOOL_NAME}-${MACOS_M1_TARGET}.app.zip \
+                        ${TOOL_NAME}-${WINDOWS_AMD64_TARGET}.app.zip """
             }
         }
     }
