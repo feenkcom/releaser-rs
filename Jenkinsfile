@@ -137,9 +137,9 @@ pipeline {
                     --auto-accept \
                     --assets \
                         ${TOOL_NAME}-${LINUX_AMD64_TARGET}.zip \
-                        ${TOOL_NAME}-${MACOS_INTEL_TARGET}.app.zip \
-                        ${TOOL_NAME}-${MACOS_M1_TARGET}.app.zip \
-                        ${TOOL_NAME}-${WINDOWS_AMD64_TARGET}.app.zip """
+                        ${TOOL_NAME}-${MACOS_INTEL_TARGET}.zip \
+                        ${TOOL_NAME}-${MACOS_M1_TARGET}.zip \
+                        ${TOOL_NAME}-${WINDOWS_AMD64_TARGET}.zip """
             }
         }
     }
