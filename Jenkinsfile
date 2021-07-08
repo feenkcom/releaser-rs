@@ -36,9 +36,9 @@ pipeline {
                         sh 'git clean -fdx'
                         sh "cargo build --bin ${TOOL_NAME} --release"
 
-                        sh "ditto -c -k --sequesterRsrc target/release/${TOOL_NAME} ${TOOL_NAME}-${TARGET}.zip"
+                        sh "mv target/release/${TOOL_NAME} ${TOOL_NAME}-${TARGET}"
 
-                        stash includes: "${TOOL_NAME}-${TARGET}.zip", name: "${TARGET}"
+                        stash includes: "${TOOL_NAME}-${TARGET}", name: "${TARGET}"
                     }
                 }
                 stage ('MacOS M1') {
@@ -55,9 +55,9 @@ pipeline {
                         sh 'git clean -fdx'
                         sh "cargo build --bin ${TOOL_NAME} --release"
 
-                        sh "ditto -c -k --sequesterRsrc target/release/${TOOL_NAME} ${TOOL_NAME}-${TARGET}.zip"
+                        sh "mv target/release/${TOOL_NAME} ${TOOL_NAME}-${TARGET}"
 
-                        stash includes: "${TOOL_NAME}-${TARGET}.zip", name: "${TARGET}"
+                        stash includes: "${TOOL_NAME}-${TARGET}", name: "${TARGET}"
                     }
                 }
                 stage ('Linux x86_64') {
@@ -73,14 +73,9 @@ pipeline {
                         sh 'git clean -fdx'
                         sh "cargo build --bin ${TOOL_NAME} --release"
 
-                        sh """
-                            cd target/release/
-                            zip -r ${TOOL_NAME}-${TARGET}.zip ${TOOL_NAME}
-                            """
+                        sh "mv target/release/${TOOL_NAME} ${TOOL_NAME}-${TARGET}"
 
-                        sh 'mv target/release/${TOOL_NAME}-${TARGET}.zip ./${TOOL_NAME}-${TARGET}.zip'
-
-                        stash includes: "${TOOL_NAME}-${TARGET}.zip", name: "${TARGET}"
+                        stash includes: "${TOOL_NAME}-${TARGET}", name: "${TARGET}"
                     }
                 }
                 stage ('Windows x86_64') {
@@ -102,9 +97,8 @@ pipeline {
                         powershell 'git clean -fdx'
 
                         powershell "cargo build --bin ${TOOL_NAME} --release"
-
-                        powershell "Compress-Archive -Path target/release/${TOOL_NAME}.exe -DestinationPath ${TOOL_NAME}-${TARGET}.zip"
-                        stash includes: "${TOOL_NAME}-${TARGET}.zip", name: "${TARGET}"
+                        powershell "Move-Item -Path target/release/${TOOL_NAME}.exe -Destination ${TOOL_NAME}-${TARGET}.exe"
+                        stash includes: "${TOOL_NAME}-${TARGET}.exe", name: "${TARGET}"
                     }
                 }
             }
@@ -136,10 +130,10 @@ pipeline {
                     --bump-minor \
                     --auto-accept \
                     --assets \
-                        ${TOOL_NAME}-${LINUX_AMD64_TARGET}.zip \
-                        ${TOOL_NAME}-${MACOS_INTEL_TARGET}.zip \
-                        ${TOOL_NAME}-${MACOS_M1_TARGET}.zip \
-                        ${TOOL_NAME}-${WINDOWS_AMD64_TARGET}.zip """
+                        ${TOOL_NAME}-${LINUX_AMD64_TARGET} \
+                        ${TOOL_NAME}-${MACOS_INTEL_TARGET} \
+                        ${TOOL_NAME}-${MACOS_M1_TARGET} \
+                        ${TOOL_NAME}-${WINDOWS_AMD64_TARGET}.exe """
             }
         }
     }
