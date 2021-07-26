@@ -11,6 +11,14 @@ pub enum VersionBump {
     Patch,
 }
 
+lazy_static! {
+    static ref VERSION_BUMP_VARIANTS: [&'static str; 3] = [
+        VersionBump::Major.to_str(),
+        VersionBump::Minor.to_str(),
+        VersionBump::Patch.to_str(),
+    ];
+}
+
 #[derive(Clone, Debug)]
 pub struct Version(SemverVersion);
 
@@ -98,6 +106,20 @@ impl fmt::Debug for VersionBumpParseError {
     }
 }
 
+impl VersionBump {
+    pub fn to_str(&self) -> &'static str {
+        match self {
+            VersionBump::Major => "major",
+            VersionBump::Minor => "minor",
+            VersionBump::Patch => "patch",
+        }
+    }
+
+    pub fn variants() -> &'static [&'static str] {
+        VERSION_BUMP_VARIANTS.as_ref()
+    }
+}
+
 impl FromStr for VersionBump {
     type Err = Box<dyn Error>;
 
@@ -109,5 +131,11 @@ impl FromStr for VersionBump {
             "patch" => Ok(VersionBump::Patch),
             &_ => Err(Box::new(VersionBumpParseError(version))),
         }
+    }
+}
+
+impl ToString for VersionBump {
+    fn to_string(&self) -> String {
+        self.to_str().to_owned()
     }
 }

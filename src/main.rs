@@ -7,6 +7,8 @@ extern crate serde;
 extern crate serde_derive;
 extern crate tokio;
 extern crate tokio_util;
+#[macro_use]
+extern crate lazy_static;
 
 mod release;
 mod version;
