@@ -75,3 +75,39 @@ impl FromStr for Version {
         Version::parse(s)
     }
 }
+
+pub struct VersionBumpParseError(String);
+
+impl Error for VersionBumpParseError {}
+
+impl fmt::Display for VersionBumpParseError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Could not parse the bump value {}", self.0.as_str())
+    }
+}
+
+impl fmt::Debug for VersionBumpParseError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{{ value: {}, file: {}, line: {} }}",
+            self.0.as_str(),
+            file!(),
+            line!()
+        )
+    }
+}
+
+impl FromStr for VersionBump {
+    type Err = Box<dyn Error>;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let version = s.to_string();
+        match version.to_lowercase().as_str() {
+            "major" => Ok(VersionBump::Major),
+            "minor" => Ok(VersionBump::Minor),
+            "patch" => Ok(VersionBump::Patch),
+            &_ => Err(Box::new(VersionBumpParseError(version))),
+        }
+    }
+}

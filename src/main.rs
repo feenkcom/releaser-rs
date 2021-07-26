@@ -70,7 +70,10 @@ fn create_first_time_version(release_options: &ReleaseOptions) -> SemVersion {
     }
 }
 
-fn create_next_version(current_version: &SemVersion, release_options: &ReleaseOptions) -> SemVersion {
+fn create_next_version(
+    current_version: &SemVersion,
+    release_options: &ReleaseOptions,
+) -> SemVersion {
     if release_options.bump_major {
         SemVersion::new(current_version.major + 1, 0, 0)
     } else if release_options.bump_minor {

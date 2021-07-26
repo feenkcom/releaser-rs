@@ -1,5 +1,5 @@
-mod version;
 mod release;
+mod version;
 
-pub use version::{Version, VersionBump};
-pub use release::{Release, GitHub};
+pub use release::{GitHub, Release};
+pub use version::{Version, VersionBump, VersionBumpParseError};
