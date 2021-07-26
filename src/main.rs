@@ -132,12 +132,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
     }
     let octocrab = octocrab_builder.build()?;
 
-    let last_version= Release::GitHub(GitHub::new(
-        &release_options.owner,
-        &release_options.repo,
-        release_options.token.clone(),
-    )).version().await?;
-
     let latest_release = octocrab
         .repos(release_options.owner.clone(), release_options.repo.clone())
         .releases()

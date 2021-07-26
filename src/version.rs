@@ -2,6 +2,7 @@ use semver::Version as SemverVersion;
 use std::error::Error;
 use std::fmt;
 use std::fmt::Display;
+use std::str::FromStr;
 
 #[derive(Debug, Clone)]
 pub enum VersionBump {
@@ -64,5 +65,13 @@ impl Display for Version {
         formatter.write_str(".")?;
         Display::fmt(&self.patch(), formatter)?;
         Ok(())
+    }
+}
+
+impl FromStr for Version {
+    type Err = Box<dyn Error>;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Version::parse(s)
     }
 }
