@@ -129,7 +129,7 @@ pipeline {
                     --owner feenkcom \
                     --repo releaser-rs \
                     --token GITHUB_TOKEN \
-                    --bump-minor \
+                    --bump minor \
                     --auto-accept \
                     --assets \
                         ${TOOL_NAME}-${LINUX_AMD64_TARGET} \
