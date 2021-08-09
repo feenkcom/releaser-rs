@@ -16,14 +16,13 @@ mod version;
 pub use release::GitHub;
 pub use release::Release;
 
-pub use version::Version;
+pub use version::{Version, VersionBump};
 
 use clap::{AppSettings, Clap};
 use github::models::repos::Release as OctoRelease;
 use github::Octocrab;
 use question::{Answer, Question};
 use reqwest::Url;
-use semver::Version as SemVersion;
 use std::error::Error;
 use std::path::PathBuf;
 
@@ -41,17 +40,11 @@ pub struct ReleaseOptions {
     #[clap(long)]
     token: Option<String>,
     /// Force a version in form X.Y.Z
-    #[clap(long, conflicts_with_all(&["bump-major", "bump-minor", "bump-patch"]))]
-    version: Option<String>,
-    /// Increase the major version, dropping minor and patch versions to 0
-    #[clap(long, conflicts_with_all(&["version", "bump-minor", "bump-patch"]))]
-    bump_major: bool,
-    /// Increase the minor version, dropping the patch version to 0
-    #[clap(long, conflicts_with_all(&["bump-major", "version", "bump-patch"]))]
-    bump_minor: bool,
-    /// Increase the patch version
-    #[clap(long, conflicts_with_all(&["bump-major", "bump-minor", "version"]))]
-    bump_patch: bool,
+    #[clap(long, parse(try_from_str = version_parse), conflicts_with_all(&["bump"]))]
+    version: Option<Version>,
+    /// Component of the version to bump
+    #[clap(long, conflicts_with_all(&["version"]), possible_values = VersionBump::variants())]
+    bump: Option<VersionBump>,
     /// Allow releaser to make decisions without asking
     #[clap(long)]
     auto_accept: bool,
@@ -60,32 +53,27 @@ pub struct ReleaseOptions {
     assets: Option<Vec<PathBuf>>,
 }
 
-pub struct ReleaserError {}
+fn version_parse(val: &str) -> Result<Version, Box<dyn Error>> {
+    Version::parse(val)
+}
 
-fn create_first_time_version(release_options: &ReleaseOptions) -> SemVersion {
-    if release_options.bump_major {
-        SemVersion::new(1, 0, 0)
-    } else if release_options.bump_minor {
-        SemVersion::new(0, 1, 0)
+fn create_first_time_version(release_options: &ReleaseOptions) -> Version {
+    if let Some(ref version) = release_options.version {
+        version.clone()
+    } else if let Some(ref bump) = release_options.bump {
+        Version::new(bump.clone())
     } else {
-        SemVersion::new(0, 0, 1)
+        panic!("Version or bump must be specified")
     }
 }
 
-fn create_next_version(
-    current_version: &SemVersion,
-    release_options: &ReleaseOptions,
-) -> SemVersion {
-    if release_options.bump_major {
-        SemVersion::new(current_version.major + 1, 0, 0)
-    } else if release_options.bump_minor {
-        SemVersion::new(current_version.major, current_version.minor + 1, 0)
+fn create_next_version(current_version: &Version, release_options: &ReleaseOptions) -> Version {
+    if let Some(ref version) = release_options.version {
+        version.clone()
+    } else if let Some(ref bump) = release_options.bump {
+        current_version.bump(bump.clone())
     } else {
-        SemVersion::new(
-            current_version.major,
-            current_version.minor,
-            current_version.patch + 1,
-        )
+        panic!("Version or bump must be specified")
     }
 }
 
@@ -161,12 +149,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
         }
         Some(latest_release) => {
             let tag_name = latest_release.tag_name.trim_start_matches('v');
-            match SemVersion::parse(&tag_name) {
-                Ok(current_version) => create_next_version(&current_version, &release_options),
-                Err(error) => {
-                    panic!("Could not parse {:?} as a version: {:?}", &tag_name, &error);
-                }
-            }
+            let current_version = Version::parse(tag_name)?;
+            create_next_version(&current_version, &release_options)
         }
     };
 
@@ -212,7 +196,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
             }
 
             upload_asset_file(asset, &new_release, &release_options, &octocrab).await?;
-            println!("Should {} be uploaded as a release asset?", asset.display());
+            println!(
+                "Successfully uploaded {} as a release asset",
+                asset.display()
+            );
         }
     }
 
