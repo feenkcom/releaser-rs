@@ -154,32 +154,45 @@ async fn main() -> Result<(), Box<dyn Error>> {
         }
     };
 
-    if !release_options.auto_accept {
-        let answer = Question::new(&format!(
-            "Are you sure you want to release a new version {}?",
-            &new_version.to_string()
-        ))
-        .default(Answer::YES)
-        .show_defaults()
-        .confirm();
-
-        if answer != Answer::YES {
-            return Ok(());
-        };
-    }
-
-    let new_release = octocrab
+    // check if the releaser already exists
+    let existing_release = octocrab
         .repos(release_options.owner.clone(), release_options.repo.clone())
         .releases()
-        .create(&format!("v{}", &new_version.to_string()))
-        .name(&format!("Release v{}", &new_version.to_string()))
-        .send()
-        .await?;
+        .get_by_tag(&format!("v{}", &new_version.to_string()))
+        .await;
 
-    println!(
-        "A new release version {:?} published!",
-        &new_version.to_string()
-    );
+    let new_release = match existing_release {
+        Ok(existing_release) => { existing_release }
+        Err(_) => {
+            if !release_options.auto_accept {
+                let answer = Question::new(&format!(
+                    "Are you sure you want to release a new version {}?",
+                    &new_version.to_string()
+                ))
+                    .default(Answer::YES)
+                    .show_defaults()
+                    .confirm();
+
+                if answer != Answer::YES {
+                    return Ok(());
+                };
+            }
+
+            let new_release = octocrab
+                .repos(release_options.owner.clone(), release_options.repo.clone())
+                .releases()
+                .create(&format!("v{}", &new_version.to_string()))
+                .name(&format!("Release v{}", &new_version.to_string()))
+                .send()
+                .await?;
+
+            println!(
+                "A new release version {:?} published!",
+                &new_version.to_string()
+            );
+            new_release
+        }
+    };
 
     if let Some(assets) = release_options.assets.as_ref() {
         for asset in assets {
