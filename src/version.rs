@@ -1,5 +1,5 @@
+use crate::{ReleaserError, Result};
 use semver::Version as SemverVersion;
-use std::error::Error;
 use std::fmt;
 use std::fmt::Display;
 use std::str::FromStr;
@@ -23,12 +23,12 @@ lazy_static! {
 pub struct Version(SemverVersion);
 
 impl Version {
-    pub fn parse(version: impl Into<String>) -> Result<Self, Box<dyn Error>> {
+    pub fn parse(version: impl Into<String>) -> Result<Self> {
         let version: String = version.into();
         let version = version.trim_start_matches('v');
         match SemverVersion::parse(&version) {
             Ok(version) => Ok(Self::forced(version.major, version.minor, version.patch)),
-            Err(error) => Err(Box::new(error)),
+            Err(error) => Into::<ReleaserError>::into(error).into(),
         }
     }
 
@@ -77,32 +77,10 @@ impl Display for Version {
 }
 
 impl FromStr for Version {
-    type Err = Box<dyn Error>;
+    type Err = ReleaserError;
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+    fn from_str(s: &str) -> Result<Self> {
         Version::parse(s)
-    }
-}
-
-pub struct VersionBumpParseError(String);
-
-impl Error for VersionBumpParseError {}
-
-impl fmt::Display for VersionBumpParseError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Could not parse the bump value {}", self.0.as_str())
-    }
-}
-
-impl fmt::Debug for VersionBumpParseError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "{{ value: {}, file: {}, line: {} }}",
-            self.0.as_str(),
-            file!(),
-            line!()
-        )
     }
 }
 
@@ -121,15 +99,15 @@ impl VersionBump {
 }
 
 impl FromStr for VersionBump {
-    type Err = Box<dyn Error>;
+    type Err = ReleaserError;
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+    fn from_str(s: &str) -> Result<Self> {
         let version = s.to_string();
         match version.to_lowercase().as_str() {
             "major" => Ok(VersionBump::Major),
             "minor" => Ok(VersionBump::Minor),
             "patch" => Ok(VersionBump::Patch),
-            &_ => Err(Box::new(VersionBumpParseError(version))),
+            &_ => ReleaserError::VersionBumpParseError(version).into(),
         }
     }
 }

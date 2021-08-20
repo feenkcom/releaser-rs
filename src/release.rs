@@ -1,12 +1,12 @@
+use crate::Result;
 use crate::Version;
-use std::error::Error;
 
 pub enum Release {
     GitHub(GitHub),
 }
 
 impl Release {
-    pub async fn version(&self) -> Result<Option<Version>, Box<dyn Error>> {
+    pub async fn version(&self) -> Result<Option<Version>> {
         match self {
             Release::GitHub(github) => github.latest_release_version().await,
         }
@@ -32,7 +32,7 @@ impl GitHub {
         }
     }
 
-    pub async fn latest_release_version(&self) -> Result<Option<Version>, Box<dyn Error>> {
+    pub async fn latest_release_version(&self) -> Result<Option<Version>> {
         let mut octocrab_builder = octocrab::Octocrab::builder();
         if let Some(personal_token) = self
             .token

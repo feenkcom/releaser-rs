@@ -9,10 +9,13 @@ extern crate tokio;
 extern crate tokio_util;
 #[macro_use]
 extern crate lazy_static;
+extern crate url;
 
+mod error;
 mod release;
 mod version;
 
+pub use error::{ReleaserError, Result};
 pub use release::GitHub;
 pub use release::Release;
 
@@ -23,8 +26,8 @@ use github::models::repos::Release as OctoRelease;
 use github::Octocrab;
 use question::{Answer, Question};
 use reqwest::Url;
-use std::error::Error;
 use std::path::PathBuf;
+use user_error::{UserFacingError, UFE};
 
 #[derive(Clap, Clone, Debug)]
 #[clap(version = "1.0", author = "feenk gmbh <contact@feenk.com>")]
@@ -53,27 +56,30 @@ pub struct ReleaseOptions {
     assets: Option<Vec<PathBuf>>,
 }
 
-fn version_parse(val: &str) -> Result<Version, Box<dyn Error>> {
+fn version_parse(val: &str) -> Result<Version> {
     Version::parse(val)
 }
 
-fn create_first_time_version(release_options: &ReleaseOptions) -> Version {
+fn create_first_time_version(release_options: &ReleaseOptions) -> Result<Version> {
     if let Some(ref version) = release_options.version {
-        version.clone()
+        Ok(version.clone())
     } else if let Some(ref bump) = release_options.bump {
-        Version::new(bump.clone())
+        Ok(Version::new(bump.clone()))
     } else {
-        panic!("Version or bump must be specified")
+        ReleaserError::NoVersionOrBumpError.into()
     }
 }
 
-fn create_next_version(current_version: &Version, release_options: &ReleaseOptions) -> Version {
+fn create_next_version(
+    current_version: &Version,
+    release_options: &ReleaseOptions,
+) -> Result<Version> {
     if let Some(ref version) = release_options.version {
-        version.clone()
+        Ok(version.clone())
     } else if let Some(ref bump) = release_options.bump {
-        current_version.bump(bump.clone())
+        Ok(current_version.bump(bump.clone()))
     } else {
-        panic!("Version or bump must be specified")
+        ReleaserError::NoVersionOrBumpError.into()
     }
 }
 
@@ -82,7 +88,7 @@ async fn upload_asset_file(
     release: &OctoRelease,
     options: &ReleaseOptions,
     octocrab: &Octocrab,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<()> {
     let uploads_url = format!(
         "https://uploads.github.com/repos/{}/{}/releases/{}/assets",
         options.owner.clone(),
@@ -110,8 +116,7 @@ async fn upload_asset_file(
     Ok(())
 }
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
+async fn run() -> Result<()> {
     let release_options: ReleaseOptions = ReleaseOptions::parse();
 
     let mut octocrab_builder = Octocrab::builder();
@@ -145,12 +150,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     return Ok(());
                 };
             }
-            create_first_time_version(&release_options)
+            create_first_time_version(&release_options)?
         }
         Some(latest_release) => {
             let tag_name = latest_release.tag_name.trim_start_matches('v');
             let current_version = Version::parse(tag_name)?;
-            create_next_version(&current_version, &release_options)
+            create_next_version(&current_version, &release_options)?
         }
     };
 
@@ -162,16 +167,16 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .await;
 
     let new_release = match existing_release {
-        Ok(existing_release) => { existing_release }
+        Ok(existing_release) => existing_release,
         Err(_) => {
             if !release_options.auto_accept {
                 let answer = Question::new(&format!(
                     "Are you sure you want to release a new version {}?",
                     &new_version.to_string()
                 ))
-                    .default(Answer::YES)
-                    .show_defaults()
-                    .confirm();
+                .default(Answer::YES)
+                .show_defaults()
+                .confirm();
 
                 if answer != Answer::YES {
                     return Ok(());
@@ -217,4 +222,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
     }
 
     Ok(())
+}
+
+#[tokio::main]
+async fn main() {
+    if let Err(error) = run().await {
+        let error: Box<dyn std::error::Error> = Box::new(error);
+        let user_facing_error: UserFacingError = error.into();
+        user_facing_error.help("").print_and_exit();
+    }
 }
