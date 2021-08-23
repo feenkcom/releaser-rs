@@ -4,6 +4,8 @@ use std::fmt;
 use std::fmt::Display;
 use std::str::FromStr;
 
+use serde::{Deserialize, Serialize};
+
 #[derive(Debug, Clone)]
 pub enum VersionBump {
     Major,
@@ -19,8 +21,12 @@ lazy_static! {
     ];
 }
 
-#[derive(Clone, Debug)]
-pub struct Version(SemverVersion);
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct Version {
+    major: u64,
+    minor: u64,
+    patch: u64,
+}
 
 impl Version {
     pub fn parse(version: impl Into<String>) -> Result<Self> {
@@ -41,7 +47,11 @@ impl Version {
     }
 
     pub fn forced(major: u64, minor: u64, patch: u64) -> Self {
-        Version(SemverVersion::new(major, minor, patch))
+        Self {
+            major,
+            minor,
+            patch,
+        }
     }
 
     pub fn bump(&self, bump: VersionBump) -> Self {
@@ -53,15 +63,15 @@ impl Version {
     }
 
     pub fn major(&self) -> u64 {
-        self.0.major
+        self.major
     }
 
     pub fn minor(&self) -> u64 {
-        self.0.minor
+        self.minor
     }
 
     pub fn patch(&self) -> u64 {
-        self.0.patch
+        self.patch
     }
 }
 

@@ -1,5 +1,6 @@
 #[macro_use]
 extern crate lazy_static;
+extern crate serde_derive;
 
 mod error;
 mod release;
