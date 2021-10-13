@@ -4,7 +4,6 @@ extern crate question;
 extern crate reqwest;
 extern crate semver;
 extern crate serde;
-extern crate serde_derive;
 extern crate tokio;
 extern crate tokio_util;
 #[macro_use]
