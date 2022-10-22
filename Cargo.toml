@@ -1,8 +1,8 @@
 [package]
 name = "feenk-releaser"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["feenk gmbh <contact@feenk.com>"]
-edition = "2018"
+edition = "2021"
 
 [lib]
 
@@ -11,16 +11,16 @@ name = "feenk-releaser"
 path = "src/main.rs"
 
 [dependencies]
-octocrab = "0.9"
+octocrab = "0.17"
 futures = "0.3"
-tokio = { version = "1.0", features = ["full"] }
-tokio-util = "0.6"
+tokio = { version = "1.21", features = ["full"] }
+tokio-util = { version = "0.7", features = [ "codec" ] }
 semver = "1.0"
-clap = "3.0.0-beta.2"
+clap = { version = "4.0", features = [ "derive" ] }
 serde = { version = "1.0", features = [ "derive" ] }
 question = "0.2"
 reqwest = { version = "0.11", features = [ "stream" ] }
 lazy_static = "1.4"
-user-error = "1.2.8"
-thiserror = "1.0.26"
-url = "2.2"
+user-error = "1.2"
+thiserror = "1.0"
+url = "2.3"

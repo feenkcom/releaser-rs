@@ -1,4 +1,6 @@
 extern crate clap;
+#[macro_use]
+extern crate lazy_static;
 extern crate octocrab as github;
 extern crate question;
 extern crate reqwest;
@@ -6,63 +8,88 @@ extern crate semver;
 extern crate serde;
 extern crate tokio;
 extern crate tokio_util;
-#[macro_use]
-extern crate lazy_static;
 extern crate url;
+
+use std::path::PathBuf;
+
+use clap::{Parser, Subcommand};
+use github::models::repos::Release as OctoRelease;
+use github::Octocrab;
+use question::{Answer, Question};
+use reqwest::Url;
+use user_error::{UserFacingError, UFE};
+
+pub use error::{ReleaserError, Result};
+pub use release::GitHub;
+pub use release::Release;
+pub use version::{Version, VersionBump};
 
 mod error;
 mod release;
 mod version;
 
-pub use error::{ReleaserError, Result};
-pub use release::GitHub;
-pub use release::Release;
-
-pub use version::{Version, VersionBump};
-
-use clap::{AppSettings, Clap};
-use github::models::repos::Release as OctoRelease;
-use github::Octocrab;
-use question::{Answer, Question};
-use reqwest::Url;
-use std::path::PathBuf;
-use user_error::{UserFacingError, UFE};
-
-#[derive(Clap, Clone, Debug)]
-#[clap(version = "1.0", author = "feenk gmbh <contact@feenk.com>")]
-#[clap(setting = AppSettings::ColoredHelp)]
-pub struct ReleaseOptions {
+#[derive(Parser, Clone, Debug)]
+#[command(author, version, about, long_about = None)]
+pub struct Options {
     /// An owner of the repository
     #[clap(long, required(true))]
     owner: String,
     /// A repository name
     #[clap(long, required(true))]
     repo: String,
-    /// A name of the environment variable with personal GitHub token. The reason we do not accept tokens directly is because thne it would be exposed in the CI log
+    /// A name of the environment variable with personal GitHub token. The reason we do not accept tokens directly is because then it would be exposed in the CI log
     #[clap(long)]
     token: Option<String>,
-    /// Force a version in form X.Y.Z
-    #[clap(long, parse(try_from_str = version_parse), conflicts_with_all(&["bump"]))]
-    version: Option<Version>,
-    /// Component of the version to bump
-    #[clap(long, conflicts_with_all(&["version"]), possible_values = VersionBump::variants())]
-    bump: Option<VersionBump>,
+    #[command(subcommand)]
+    command: Option<Commands>,
+}
+
+#[derive(Parser, Clone, Debug)]
+pub struct ReleaseOptions {
     /// Allow releaser to make decisions without asking
     #[clap(long)]
     auto_accept: bool,
     /// Attach provided assets to the release
-    #[clap(long, parse(from_os_str))]
+    #[arg(long)]
     assets: Option<Vec<PathBuf>>,
+    #[clap(flatten)]
+    next_version: NextVersionOptions,
+}
+
+#[derive(Parser, Clone, Debug)]
+pub struct NextVersionOptions {
+    /// Force a version in form X.Y.Z
+    #[arg(long, value_parser = version_parse, conflicts_with_all(&["bump"]))]
+    version: Option<Version>,
+    /// Component of the version to bump
+    #[arg(long, value_enum, conflicts_with_all(&["version"]))]
+    bump: Option<VersionBump>,
+}
+
+#[derive(Subcommand, Debug, Clone)]
+enum Commands {
+    /// Create a new github release and upload release assets
+    Release(ReleaseOptions),
+    NextVersion(NextVersionOptions),
+}
+
+impl Commands {
+    pub async fn run(&self, options: &Options) -> Result<()> {
+        match self {
+            Commands::Release(release_options) => create_release(options, release_options).await,
+            Commands::NextVersion(next_version) => print_next_version(options, next_version).await,
+        }
+    }
 }
 
 fn version_parse(val: &str) -> Result<Version> {
     Version::parse(val)
 }
 
-fn create_first_time_version(release_options: &ReleaseOptions) -> Result<Version> {
-    if let Some(ref version) = release_options.version {
+fn create_first_time_version(next_version: &NextVersionOptions) -> Result<Version> {
+    if let Some(ref version) = next_version.version {
         Ok(version.clone())
-    } else if let Some(ref bump) = release_options.bump {
+    } else if let Some(ref bump) = next_version.bump {
         Ok(Version::new(bump.clone()))
     } else {
         ReleaserError::NoVersionOrBumpError.into()
@@ -71,11 +98,11 @@ fn create_first_time_version(release_options: &ReleaseOptions) -> Result<Version
 
 fn create_next_version(
     current_version: &Version,
-    release_options: &ReleaseOptions,
+    next_version: &NextVersionOptions,
 ) -> Result<Version> {
-    if let Some(ref version) = release_options.version {
+    if let Some(ref version) = next_version.version {
         Ok(version.clone())
-    } else if let Some(ref bump) = release_options.bump {
+    } else if let Some(ref bump) = next_version.bump {
         Ok(current_version.bump(bump.clone()))
     } else {
         ReleaserError::NoVersionOrBumpError.into()
@@ -85,7 +112,7 @@ fn create_next_version(
 async fn upload_asset_file(
     file: &PathBuf,
     release: &OctoRelease,
-    options: &ReleaseOptions,
+    options: &Options,
     octocrab: &Octocrab,
 ) -> Result<()> {
     let uploads_url = format!(
@@ -116,21 +143,18 @@ async fn upload_asset_file(
 }
 
 async fn run() -> Result<()> {
-    let release_options: ReleaseOptions = ReleaseOptions::parse();
-
-    let mut octocrab_builder = Octocrab::builder();
-    if let Some(personal_token) = release_options
-        .token
-        .as_ref()
-        .map(|var_name| std::env::var(var_name).map_or(None, |token| Some(token)))
-        .map_or(None, |token| token)
-    {
-        octocrab_builder = octocrab_builder.personal_token(personal_token);
+    let options: Options = Options::parse();
+    if let Some(ref command) = options.command {
+        return command.run(&options).await;
     }
-    let octocrab = octocrab_builder.build()?;
+    Ok(())
+}
+
+async fn create_release(options: &Options, release_options: &ReleaseOptions) -> Result<()> {
+    let octocrab = init_octocrab(options)?;
 
     let latest_release = octocrab
-        .repos(release_options.owner.clone(), release_options.repo.clone())
+        .repos(options.owner.clone(), options.repo.clone())
         .releases()
         .get_latest()
         .await
@@ -149,18 +173,18 @@ async fn run() -> Result<()> {
                     return Ok(());
                 };
             }
-            create_first_time_version(&release_options)?
+            create_first_time_version(&release_options.next_version)?
         }
         Some(latest_release) => {
             let tag_name = latest_release.tag_name.trim_start_matches('v');
             let current_version = Version::parse(tag_name)?;
-            create_next_version(&current_version, &release_options)?
+            create_next_version(&current_version, &release_options.next_version)?
         }
     };
 
     // check if the releaser already exists
     let existing_release = octocrab
-        .repos(release_options.owner.clone(), release_options.repo.clone())
+        .repos(options.owner.clone(), options.repo.clone())
         .releases()
         .get_by_tag(&format!("v{}", &new_version.to_string()))
         .await;
@@ -183,7 +207,7 @@ async fn run() -> Result<()> {
             }
 
             let new_release = octocrab
-                .repos(release_options.owner.clone(), release_options.repo.clone())
+                .repos(options.owner.clone(), options.repo.clone())
                 .releases()
                 .create(&format!("v{}", &new_version.to_string()))
                 .name(&format!("Release v{}", &new_version.to_string()))
@@ -212,7 +236,7 @@ async fn run() -> Result<()> {
                 };
             }
 
-            upload_asset_file(asset, &new_release, &release_options, &octocrab).await?;
+            upload_asset_file(asset, &new_release, options, &octocrab).await?;
             println!(
                 "Successfully uploaded {} as a release asset",
                 asset.display()
@@ -220,6 +244,46 @@ async fn run() -> Result<()> {
         }
     }
 
+    Ok(())
+}
+
+fn init_octocrab(options: &Options) -> Result<Octocrab> {
+    let mut octocrab_builder = Octocrab::builder();
+    if let Some(personal_token) = options
+        .token
+        .as_ref()
+        .map(|var_name| std::env::var(var_name).map_or(None, |token| Some(token)))
+        .map_or(None, |token| token)
+    {
+        octocrab_builder = octocrab_builder.personal_token(personal_token);
+    }
+    let octocrab = octocrab_builder.build()?;
+    Ok(octocrab)
+}
+
+async fn print_next_version(
+    options: &Options,
+    next_version_options: &NextVersionOptions,
+) -> Result<()> {
+    let octocrab = init_octocrab(options)?;
+
+    let latest_release = octocrab
+        .repos(options.owner.clone(), options.repo.clone())
+        .releases()
+        .get_latest()
+        .await
+        .map_or(None, |release| Some(release));
+
+    let new_version = match &latest_release {
+        None => create_first_time_version(next_version_options)?,
+        Some(latest_release) => {
+            let tag_name = latest_release.tag_name.trim_start_matches('v');
+            let current_version = Version::parse(tag_name)?;
+            create_next_version(&current_version, next_version_options)?
+        }
+    };
+
+    println!("{}", new_version.to_string());
     Ok(())
 }
 
