@@ -4,18 +4,24 @@ import hudson.tasks.junit.CaseResult
 
 pipeline {
     agent none
+    parameters {
+            choice(name: 'BUMP', choices: ['minor', 'patch', 'major'], description: 'What to bump when releasing') }
     options {
         buildDiscarder(logRotator(numToKeepStr: '50'))
         disableConcurrentBuilds()
     }
     environment {
         GITHUB_TOKEN = credentials('githubrelease')
-        AWSIP = 'ec2-18-197-145-81.eu-central-1.compute.amazonaws.com'
-
         TOOL_NAME = 'feenk-releaser'
         MACOS_INTEL_TARGET = 'x86_64-apple-darwin'
         MACOS_M1_TARGET = 'aarch64-apple-darwin'
+
+        WINDOWS_AMD64_SERVER_NAME = 'daffy-duck'
         WINDOWS_AMD64_TARGET = 'x86_64-pc-windows-msvc'
+        WINDOWS_ARM64_SERVER_NAME = 'bugs-bunny'
+        WINDOWS_ARM64_TARGET = 'aarch64-pc-windows-msvc'
+
+        LINUX_SERVER_NAME = 'mickey-mouse'
         LINUX_AMD64_TARGET = 'x86_64-unknown-linux-gnu'
     }
 
@@ -62,7 +68,7 @@ pipeline {
                 }
                 stage ('Linux x86_64') {
                     agent {
-                        label "${LINUX_AMD64_TARGET}"
+                        label "${LINUX_AMD64_TARGET}-${LINUX_SERVER_NAME}"
                     }
                     environment {
                         TARGET = "${LINUX_AMD64_TARGET}"
@@ -80,18 +86,34 @@ pipeline {
                 }
                 stage ('Windows x86_64') {
                     agent {
-                        label "${WINDOWS_AMD64_TARGET}"
+                        label "${WINDOWS_AMD64_TARGET}-${WINDOWS_AMD64_SERVER_NAME}"
                     }
 
                     environment {
                         TARGET = "${WINDOWS_AMD64_TARGET}"
-                        LLVM_HOME = 'C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\BuildTools\\VC\\Tools\\Llvm\\x64'
-                        LIBCLANG_PATH = "${LLVM_HOME}\\bin"
-                        CMAKE_PATH = 'C:\\Program Files\\CMake\\bin'
-                        MSBUILD_PATH = 'C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\BuildTools\\MSBuild\\Current\\Bin'
                         CARGO_HOME = "C:\\.cargo"
                         CARGO_PATH = "${CARGO_HOME}\\bin"
-                        PATH = "${CARGO_PATH};${LIBCLANG_PATH};${MSBUILD_PATH};${CMAKE_PATH};$PATH"
+                        PATH = "${CARGO_PATH};$PATH"
+                    }
+
+                    steps {
+                        powershell 'git clean -fdx'
+
+                        powershell "cargo build --bin ${TOOL_NAME} --release"
+                        powershell "Move-Item -Path target/release/${TOOL_NAME}.exe -Destination ${TOOL_NAME}-${TARGET}.exe"
+                        stash includes: "${TOOL_NAME}-${TARGET}.exe", name: "${TARGET}"
+                    }
+                }
+                stage ('Windows arm64') {
+                    agent {
+                        label "${WINDOWS_ARM64_TARGET}-${WINDOWS_ARM64_SERVER_NAME}"
+                    }
+
+                    environment {
+                        TARGET = "${WINDOWS_ARM64_TARGET}"
+                        CARGO_HOME = "C:\\.cargo"
+                        CARGO_PATH = "${CARGO_HOME}\\bin"
+                        PATH = "${CARGO_PATH};$PATH"
                     }
 
                     steps {
@@ -107,11 +129,11 @@ pipeline {
 
         stage ('Deployment') {
             agent {
-                label "${LINUX_AMD64_TARGET}"
+                label "${MACOS_M1_TARGET}"
             }
             environment {
                 PATH = "$HOME/.cargo/bin:$PATH"
-                TARGET = "${LINUX_AMD64_TARGET}"
+                TARGET = "${MACOS_M1_TARGET}"
             }
             when {
                 expression {
@@ -123,19 +145,22 @@ pipeline {
                 unstash "${MACOS_INTEL_TARGET}"
                 unstash "${MACOS_M1_TARGET}"
                 unstash "${WINDOWS_AMD64_TARGET}"
+                unstash "${WINDOWS_ARM64_TARGET}"
 
                 sh """
                 cargo run --bin feenk-releaser --release -- \
                     --owner feenkcom \
                     --repo releaser-rs \
                     --token GITHUB_TOKEN \
-                    --bump minor \
+                    release \
+                    --bump ${params.BUMP} \
                     --auto-accept \
                     --assets \
                         ${TOOL_NAME}-${LINUX_AMD64_TARGET} \
                         ${TOOL_NAME}-${MACOS_INTEL_TARGET} \
                         ${TOOL_NAME}-${MACOS_M1_TARGET} \
-                        ${TOOL_NAME}-${WINDOWS_AMD64_TARGET}.exe """
+                        ${TOOL_NAME}-${WINDOWS_AMD64_TARGET}.exe \
+                        ${TOOL_NAME}-${WINDOWS_ARM64_TARGET}.exe """
             }
         }
     }
