@@ -50,7 +50,7 @@ pub struct ReleaseOptions {
     #[clap(long)]
     auto_accept: bool,
     /// Attach provided assets to the release
-    #[arg(long)]
+    #[clap(long, num_args = (1..))]
     assets: Option<Vec<PathBuf>>,
     #[clap(flatten)]
     next_version: NextVersionOptions,
