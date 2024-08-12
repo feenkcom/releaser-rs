@@ -1,6 +1,9 @@
 extern crate clap;
 #[macro_use]
 extern crate lazy_static;
+#[macro_use]
+extern crate log;
+
 extern crate octocrab as github;
 extern crate question;
 extern crate reqwest;
@@ -12,16 +15,14 @@ extern crate url;
 
 use std::path::PathBuf;
 
+use bytes::Bytes;
 use clap::{Parser, Subcommand};
 use github::models::repos::Release as OctoRelease;
 use github::Octocrab;
 use question::{Answer, Question};
-use reqwest::Url;
-use user_error::{UserFacingError, UFE};
+use user_error::{UFE, UserFacingError};
 
 pub use error::{ReleaserError, Result};
-pub use release::GitHub;
-pub use release::Release;
 pub use version::{Version, VersionBump};
 
 mod error;
@@ -50,7 +51,7 @@ pub struct ReleaseOptions {
     #[clap(long)]
     auto_accept: bool,
     /// Attach provided assets to the release
-    #[clap(long, num_args = (1..))]
+    #[clap(long, num_args = 1..)]
     assets: Option<Vec<PathBuf>>,
     #[clap(flatten)]
     next_version: NextVersionOptions,
@@ -115,30 +116,19 @@ async fn upload_asset_file(
     options: &Options,
     octocrab: &Octocrab,
 ) -> Result<()> {
-    let uploads_url = format!(
-        "https://uploads.github.com/repos/{}/{}/releases/{}/assets",
-        options.owner.clone(),
-        options.repo.clone(),
-        release.id
-    );
-
-    let base_url = Url::parse(&uploads_url)?;
-
     let filename = file.file_name().unwrap().to_str().unwrap();
-    let mut new_url = base_url.clone();
-    new_url.set_query(Some(format!("{}={}", "name", filename).as_str()));
+    let file_contents = tokio::fs::read(file).await?;
+    let file_data = Bytes::from(file_contents);
 
-    let file_size = std::fs::metadata(file)?.len();
-    let file = tokio::fs::File::open(file).await?;
-    let stream = tokio_util::codec::FramedRead::new(file, tokio_util::codec::BytesCodec::new());
-    let body = reqwest::Body::wrap_stream(stream);
+    let asset = octocrab
+        .repos(options.owner.clone(), options.repo.clone())
+        .releases()
+        .upload_asset(release.id.into_inner(), filename, file_data)
+        .send()
+        .await?;
 
-    let builder = octocrab
-        .request_builder(new_url.as_str(), reqwest::Method::POST)
-        .header("Content-Type", "application/octet-stream")
-        .header("Content-Length", file_size.to_string());
+    info!("Uploaded asset: {:?}", asset);
 
-    builder.body(body).send().await?;
     Ok(())
 }
 
