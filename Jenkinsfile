@@ -26,6 +26,20 @@ pipeline {
     }
 
     stages {
+        stage ('Read tool versions') {
+            agent {
+                label "${MACOS_M1_TARGET}"
+            }
+            steps {
+                script {
+                    FEENK_SIGNER_VERSION = sh (
+                        script: "cat feenk-signer.version",
+                        returnStdout: true
+                    ).trim()
+                }
+                echo "Will sign using feenk-releaser ${FEENK_SIGNER_VERSION}"
+            }
+        }
         stage ('Parallel build') {
             parallel {
                 stage ('MacOS x86_64') {
@@ -126,7 +140,32 @@ pipeline {
                 }
             }
         }
+        stage ('Sign and Notarize Mac') {
+            agent {
+                label "${MACOS_M1_TARGET}"
+            }
 
+            environment {
+                TARGET = "${MACOS_M1_TARGET}"
+                PATH = "$HOME/.cargo/bin:/opt/homebrew/bin:$PATH"
+                CERT = credentials('devcertificate')
+                APPLEPASSWORD = credentials('notarizepassword-manager')
+            }
+
+            steps {
+                unstash "${MACOS_INTEL_TARGET}"
+                unstash "${MACOS_M1_TARGET}"
+                sh "rm -rf feenk-signer"
+                sh "curl -o feenk-signer -LsS  https://github.com/feenkcom/feenk-signer/releases/download/${FEENK_SIGNER_VERSION}/feenk-signer-${TARGET}"
+                sh "chmod +x feenk-signer"
+
+                sh "./feenk-signer ${TOOL_NAME}-${MACOS_INTEL_TARGET}"
+                sh "./feenk-signer ${TOOL_NAME}-${MACOS_M1_TARGET}"
+
+                stash includes: "${TOOL_NAME}-${MACOS_INTEL_TARGET}", name: "${MACOS_INTEL_TARGET}"
+                stash includes: "${TOOL_NAME}-${MACOS_M1_TARGET}", name: "${MACOS_M1_TARGET}"
+            }
+        }
         stage ('Deployment') {
             agent {
                 label "${MACOS_M1_TARGET}"
