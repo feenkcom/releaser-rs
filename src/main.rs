@@ -15,12 +15,13 @@ extern crate url;
 
 use std::path::PathBuf;
 
-use bytes::Bytes;
+use bytes::{Buf, Bytes};
 use clap::{Parser, Subcommand};
-use github::models::repos::Release as OctoRelease;
+use github::models::repos::{Release as OctoRelease, Release};
 use github::Octocrab;
 use question::{Answer, Question};
-use user_error::{UFE, UserFacingError};
+use sha256::digest;
+use user_error::{UserFacingError, UFE};
 
 pub use error::{ReleaserError, Result};
 pub use version::{Version, VersionBump};
@@ -117,8 +118,11 @@ async fn upload_asset_file(
     octocrab: &Octocrab,
 ) -> Result<()> {
     let filename = file.file_name().unwrap().to_str().unwrap();
+    let filename_without_extension = file.file_stem().unwrap().to_str().unwrap();
+
     let file_contents = tokio::fs::read(file).await?;
     let file_data = Bytes::from(file_contents);
+    let file_hash = digest(file_data.chunk());
 
     let asset = octocrab
         .repos(options.owner.clone(), options.repo.clone())
@@ -128,6 +132,19 @@ async fn upload_asset_file(
         .await?;
 
     info!("Uploaded asset: {:?}", asset);
+
+    let asset_hash = octocrab
+        .repos(options.owner.clone(), options.repo.clone())
+        .releases()
+        .upload_asset(
+            release.id.into_inner(),
+            &format!("{}.sha256", filename_without_extension),
+            Bytes::from(file_hash),
+        )
+        .send()
+        .await?;
+
+    info!("Uploaded asset hash: {:?}", asset_hash);
 
     Ok(())
 }
@@ -143,12 +160,7 @@ async fn run() -> Result<()> {
 async fn create_release(options: &Options, release_options: &ReleaseOptions) -> Result<()> {
     let octocrab = init_octocrab(options)?;
 
-    let latest_release = octocrab
-        .repos(options.owner.clone(), options.repo.clone())
-        .releases()
-        .get_latest()
-        .await
-        .map_or(None, |release| Some(release));
+    let latest_release = get_latest_release(options, &octocrab).await;
 
     let new_version = match &latest_release {
         None => {
@@ -257,12 +269,7 @@ async fn print_next_version(
 ) -> Result<()> {
     let octocrab = init_octocrab(options)?;
 
-    let latest_release = octocrab
-        .repos(options.owner.clone(), options.repo.clone())
-        .releases()
-        .get_latest()
-        .await
-        .map_or(None, |release| Some(release));
+    let latest_release = get_latest_release(options, &octocrab).await;
 
     let new_version = match &latest_release {
         None => create_first_time_version(next_version_options)?,
@@ -275,6 +282,15 @@ async fn print_next_version(
 
     println!("{}", new_version.to_string());
     Ok(())
+}
+
+async fn get_latest_release(options: &Options, octocrab: &Octocrab) -> Option<Release> {
+    octocrab
+        .repos(options.owner.clone(), options.repo.clone())
+        .releases()
+        .get_latest()
+        .await
+        .map_or(None, |release| Some(release))
 }
 
 #[tokio::main]
