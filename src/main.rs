@@ -118,7 +118,6 @@ async fn upload_asset_file(
     octocrab: &Octocrab,
 ) -> Result<()> {
     let filename = file.file_name().unwrap().to_str().unwrap();
-    let filename_without_extension = file.file_stem().unwrap().to_str().unwrap();
 
     let file_contents = tokio::fs::read(file).await?;
     let file_data = Bytes::from(file_contents);
@@ -138,7 +137,7 @@ async fn upload_asset_file(
         .releases()
         .upload_asset(
             release.id.into_inner(),
-            &format!("{}.sha256", filename_without_extension),
+            &format!("{}.sha256", filename),
             Bytes::from(file_hash),
         )
         .send()
