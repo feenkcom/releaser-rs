@@ -148,8 +148,6 @@ pipeline {
             environment {
                 TARGET = "${MACOS_M1_TARGET}"
                 PATH = "$HOME/.cargo/bin:/opt/homebrew/bin:$PATH"
-                CERT = credentials('devcertificate')
-                APPLEPASSWORD = credentials('notarizepassword-manager')
             }
 
             steps {
@@ -161,6 +159,7 @@ pipeline {
 
                 withCredentials([
                     file(credentialsId: 'feenk-apple-developer-certificate', variable: 'CERT'),
+                    string(credentialsId: 'feenk-apple-developer-certificate-password', variable: 'CERT_PASSWORD'),
                     string(credentialsId: 'feenk-apple-signing-identity', variable: 'SIGNING_IDENTITY')
                 ]) {
                     sh "./feenk-signer mac ${TOOL_NAME}-${MACOS_INTEL_TARGET}"
