@@ -34,7 +34,7 @@ impl Version {
         let version = version.trim_start_matches('v');
         match SemverVersion::parse(&version) {
             Ok(version) => Ok(Self::forced(version.major, version.minor, version.patch)),
-            Err(error) => Into::<ReleaserError>::into(error).into(),
+            Err(error) => ReleaserError::VersionParseError(error, version.to_string()).into(),
         }
     }
 

@@ -8,8 +8,8 @@ pub enum ReleaserError {
     IoError(#[from] std::io::Error),
     #[error("Octocrab error")]
     OctocrabError(#[from] octocrab::Error),
-    #[error("Failed to parse version string")]
-    VersionParseError(#[from] semver::Error),
+    #[error("Failed to parse version string: `{1}`")]
+    VersionParseError(#[source] semver::Error, String),
     #[error("Failed to parse url")]
     UrlParseError(#[from] url::ParseError),
     #[error("Failed to perform a request")]
