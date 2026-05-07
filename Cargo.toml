@@ -11,20 +11,18 @@ name = "feenk-releaser"
 path = "src/main.rs"
 
 [dependencies]
-octocrab = "0.39"
-futures = "0.3"
-tokio = { version = "1.21", features = ["full"] }
+octocrab = "0.50"
+tokio = { version = "1.52", features = ["full"] }
 tokio-util = { version = "0.7", features = [ "codec" ] }
 semver = "1.0"
 clap = { version = "4.0", features = [ "derive" ] }
 serde = { version = "1.0", features = [ "derive" ] }
 question = "0.2"
-reqwest = { version = "0.12", features = [ "stream" ] }
+reqwest = { version = "0.13", features = [ "stream" ] }
 lazy_static = "1.4"
 user-error = "1.2"
-thiserror = "1.0"
-url = "2.3"
-bytes = "1.7"
-http = "1.1"
+thiserror = "2.0"
+url = "2.5"
+bytes = "1.11"
 log = "0.4"
-sha256 = "1.5"
+sha256 = "1.6"
