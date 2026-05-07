@@ -6,7 +6,6 @@ extern crate log;
 
 extern crate octocrab as github;
 extern crate question;
-extern crate reqwest;
 extern crate semver;
 extern crate serde;
 extern crate tokio;

@@ -12,8 +12,6 @@ pub enum ReleaserError {
     VersionParseError(#[source] semver::Error, String),
     #[error("Failed to parse url")]
     UrlParseError(#[from] url::ParseError),
-    #[error("Failed to perform a request")]
-    ReqwestError(#[from] reqwest::Error),
     #[error("Failed to parse version bump {0}")]
     VersionBumpParseError(String),
     #[error("Version or bump are not specified")]
